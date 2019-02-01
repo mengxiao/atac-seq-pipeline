@@ -93,54 +93,6 @@ workflow atac {
 	Int ataqc_mem_java_mb = 15000
 	Int ataqc_time_hr = 24
 
-	#### input file definition
-		# pipeline can start from any type of inputs and then leave all other types undefined
-		# supported types: fastq, bam, nodup_bam (filtered bam), ta (tagAlign), peak
-		# define up to 6 replicates
-		# [rep_id] is for each replicate
-
- 	### fastqs and adapters  	
-	 	# [merge_id] is for pooing fastqs after trimming adapters
-	 	# if adapters defined with any style, keep the same structure/dimension as fastq arrays
-	 	# only defined adapters will be trimmed
-	 	# or undefined adapters will be detected/trimmed by trim_adapter.auto_detect_adapter=true 
-	 	# so you can selectively detect/trim adapters for a specific fastq
- 		# [read_end_id] is for fastq R1 or fastq R2
-
-	### other input types (bam, nodup_bam, ta)
-	Array[File] bams = [] 		# [rep_id]
-	Array[File] nodup_bams = [] # [rep_id]
-	Array[File] tas = []		# [rep_id]
-
-	### other input types (peak)
-	Array[File] peaks = []		# [PAIR(rep_id1,rep_id2)]. example for 3 reps: [rep1_rep2, rep1_rep3, rep2_rep3]
-	Array[File] peaks_pr1 = []	# [rep_id]. do not define if true_rep=true
-	Array[File] peaks_pr2 = []	# [rep_id]. do not define if true_rep=true
-	File? peak_ppr1				# do not define if you have a single replicate or true_rep=true
-	File? peak_ppr2				# do not define if you have a single replicate or true_rep=true
-	File? peak_pooled			# do not define if you have a single replicate or true_rep=true
-
-	### other inputs used for resuming pipelines (QC/txt/log/png files, ...)
-	File? ta_pooled
-	Array[File] read_len_logs = []
-	Array[File] flagstat_qcs = []
-	Array[File] align_logs = []
-	Array[File] pbc_qcs = []
-	Array[File] dup_qcs = []
-	Array[File] nodup_flagstat_qcs = []
-	Array[File] mito_dup_logs = []
-	Array[File] sig_pvals = []
-	Array[File] xcor_plots = []
-	Array[File] xcor_scores = []
-	Array[File] macs2_frip_qcs = []
-	Array[File] macs2_pr1_frip_qcs = []
-	Array[File] macs2_pr2_frip_qcs = []
-	File? macs2_pooled_frip_qc_
-	File? macs2_ppr1_frip_qc_
-	File? macs2_ppr2_frip_qc_
-	Array[File] ataqc_htmls = []
-	Array[File] ataqc_txts = []
-
 	### read genome data and paths
 	call read_map_sub.read_map as read_genome_tsv { input : map_file = genome_tsv }
 	File bowtie2_idx_tar = read_genome_tsv.map['bowtie2_idx_tar']
@@ -161,7 +113,18 @@ workflow atac {
 	String peak_type = 'narrowPeak' # peak type for IDR and overlap
 	String idr_rank = 'p.value' # IDR ranking method
 
-	### pipeline starts here
+	#### input file definition
+		# define up to 6 replicates
+		# [rep_id] is for each replicate
+
+	### fastqs and adapters
+		# [merge_id] is for pooing fastqs after trimming adapters
+		# if adapters defined with any style, keep the same structure/dimension as fastq arrays
+		# only defined adapters will be trimmed
+		# or undefined adapters will be detected/trimmed by trim_adapter.auto_detect_adapter=true
+		# so you can selectively detect/trim adapters for a specific fastq
+		# [read_end_id] is for fastq R1 or fastq R2
+
 	# Parse fastq and corresponding adapters files. There needs to be a file listing TSVs, each of which corresponds
 	# to a replicate. In each replicate's TSV, there needs to be a 2 row table, with row 1 corresponding to R1 FASTQs
 	# and row 2 corresponding to R2 FASTQs
@@ -187,13 +150,7 @@ workflow atac {
 	}
 	Array[Array[Array[String]]] adapters_ = if adapters_specified then adapters_specified else []
 
-	## temp vars for resuming pipelines
-	Boolean need_to_process_ta = length(peaks_pr1)==0 && length(peaks)==0
-	Boolean need_to_process_nodup_bam = need_to_process_ta && length(tas)==0
-	Boolean need_to_process_bam = need_to_process_nodup_bam && length(nodup_bams)==0
-	Boolean need_to_process_fastq = need_to_process_bam && length(bams)==0
-
-	scatter( i in range(if need_to_process_fastq then length(fastqs_) else 0) ) {
+	scatter( i in range(length(fastqs_)) ) {
 		# trim adapters and merge trimmed fastqs
 		call trim_adapter { input :
 			fastqs = fastqs_[i],
@@ -225,8 +182,8 @@ workflow atac {
 		}
 	}
 
-	Array[File] bams_ = flatten([bowtie2.bam, bams])
-	scatter( bam in if need_to_process_bam then bams_ else [] ) {
+	Array[File] bams_ = bowtie2.bam
+	scatter( bam in bams_  ) {
 		# filter/dedup bam
 		call filter { input :
 			bam = bam,
@@ -245,8 +202,8 @@ workflow atac {
 		}
 	}
 
-	Array[File] nodup_bams_ = flatten([filter.nodup_bam, nodup_bams])
-	scatter( bam in if need_to_process_nodup_bam then nodup_bams_ else [] ) {
+	Array[File] nodup_bams_ = filter.nodup_bam
+	scatter( bam in nodup_bams_ ) {
 		# convert bam to tagalign and subsample it if necessary
 		call bam2ta { input :
 			bam = bam,
@@ -264,9 +221,8 @@ workflow atac {
 		}
 	}
 
-	Array[File] tas_ = if align_only then [] else flatten([bam2ta.ta, tas])
-	Array[File] tas__ = if need_to_process_ta then tas_ else []
-	scatter( ta in tas__ ) {
+	Array[File] tas_ = if align_only then [] else bam2ta.ta
+	scatter( ta in tas_ ) {
 		# call peaks on tagalign
 		call macs2 { input :
 			ta = ta,
@@ -285,10 +241,10 @@ workflow atac {
 			docker = docker
 		}
 	}
-	if ( length(tas__)>1 ) {
+	if ( length(tas_)>1 ) {
 		# pool tagaligns from true replicates
 		call pool_ta { input :
-			tas = tas__,
+			tas = tas_,
 			docker = docker
 		}
 		# call peaks on pooled replicate
@@ -309,8 +265,8 @@ workflow atac {
 			docker = docker
 		}
 	}
-	if ( enable_xcor && length(xcor_scores)<1 ) {
-		scatter( ta in tas__ ) {
+	if ( enable_xcor ) {
+		scatter( ta in tas_ ) {
 			# subsample tagalign (non-mito) and cross-correlation analysis
 			call xcor { input :
 				ta = ta,
@@ -328,7 +284,7 @@ workflow atac {
 	}
 
 	if ( !true_rep_only ) {
-		scatter( ta in tas__ ) {
+		scatter( ta in tas_ ) {
 			# make two self pseudo replicates per true replicate
 			call spr { input :
 				ta = ta,
@@ -373,7 +329,7 @@ workflow atac {
 		}
 	}
 
-	if ( !true_rep_only && length(tas__)>1 ) {
+	if ( !true_rep_only && length(tas_)>1 ) {
 		# pool tagaligns from pseudo replicates
 		call pool_ta as pool_ta_pr1 { input :
 			tas = spr.ta_pr1,
@@ -420,7 +376,7 @@ workflow atac {
 	}
 
 	# make peak arrays
-	Array[File] peaks_ = flatten([macs2.npeak, peaks])
+	Array[File] peaks_ = macs2.npeak
 
 	# generate all possible pairs of true replicates (pair: left=prefix, right=[peak1,peak2])
 	Array[Pair[String,Array[File]]] peak_pairs =  
@@ -452,12 +408,12 @@ workflow atac {
 				prefix = pair.left,
 				peak1 = pair.right[0],
 				peak2 = pair.right[1],
-				peak_pooled = select_first([macs2_pooled.npeak, peak_pooled]),
+				peak_pooled = macs2_pooled.npeak,
 				peak_type = peak_type,
 				blacklist = blacklist,
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-				ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				ta = pool_ta.ta_pooled,
 				docker = docker
 			}
 		}
@@ -469,21 +425,21 @@ workflow atac {
 				prefix = pair.left,
 				peak1 = pair.right[0],
 				peak2 = pair.right[1],
-				peak_pooled = select_first([macs2_pooled.npeak, peak_pooled]),
+				peak_pooled = macs2_pooled.npeak,
 				idr_thresh = idr_thresh,
 				peak_type = peak_type,
 				rank = idr_rank,
 				blacklist = blacklist,
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-				ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				ta = pool_ta.ta_pooled,
 				docker = docker
 			}
 		}
 	}
 
-	Array[File] peaks_pr1_ = flatten(select_all([macs2_pr1.npeak, peaks_pr1]))
-	Array[File] peaks_pr2_ = flatten(select_all([macs2_pr2.npeak, peaks_pr2]))
+	Array[File] peaks_pr1_ = if defined(macs2_pr1.npeak) then select_first([macs2_pr1.npeak]) else []
+	Array[File] peaks_pr2_ = if defined(macs2_pr2.npeak) then select_first([macs2_pr2.npeak]) else []
 
 	scatter( i in range(length(peaks_pr1_)) ) {
 		# Naive overlap on pseduo replicates
@@ -496,7 +452,7 @@ workflow atac {
 			blacklist = blacklist,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-			ta = if length(tas_)>0 then tas_[i] else if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+			ta = if length(tas_)>0 then tas_[i] else pool_ta.ta_pooled,
 			docker = docker
 		}
 	}
@@ -514,7 +470,7 @@ workflow atac {
 				blacklist = blacklist,
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-				ta = if length(tas_)>0 then tas_[i] else if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				ta = if length(tas_)>0 then tas_[i] else pool_ta.ta_pooled,
 				docker = docker
 			}
 		}
@@ -523,14 +479,14 @@ workflow atac {
 		# Naive overlap on pooled pseudo replicates
 		call overlap as overlap_ppr { input : 
 			prefix = "ppr",
-			peak1 = select_first([macs2_ppr1.npeak, peak_ppr1]),
-			peak2 = select_first([macs2_ppr2.npeak, peak_ppr2]),
-			peak_pooled = select_first([macs2_pooled.npeak, peak_pooled]),
+			peak1 = macs2_ppr1.npeak,
+			peak2 = macs2_ppr2.npeak,
+			peak_pooled = macs2_pooled.npeak,
 			peak_type = peak_type,
 			blacklist = blacklist,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-			ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+			ta = pool_ta.ta_pooled,
 			docker = docker
 		}
 	}
@@ -539,16 +495,16 @@ workflow atac {
 		call idr as idr_ppr { input : 
 			docker = docker,
 			prefix = "ppr",
-			peak1 = select_first([macs2_ppr1.npeak, peak_ppr1]),
-			peak2 = select_first([macs2_ppr2.npeak, peak_ppr2]),
-			peak_pooled = select_first([macs2_pooled.npeak, peak_pooled]),
+			peak1 = macs2_ppr1.npeak,
+			peak2 = macs2_ppr2.npeak,
+			peak_pooled = macs2_pooled.npeak,
 			idr_thresh = idr_thresh,
 			peak_type = peak_type,
 			rank = idr_rank,
 			blacklist = blacklist,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-			ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled
+			ta = pool_ta.ta_pooled
 		}
 	}
 	if ( !align_only && !true_rep_only ) {
@@ -579,27 +535,22 @@ workflow atac {
 	}
 
 	# count number of replicates for ataqc	
-	Int num_rep = if disable_ataqc || length(ataqc_htmls)>0 then 0
-		else if length(fastqs_)>0 then length(fastqs_)
-		else if length(bams_)>0 then length(bams_)
-		else if length(tas_)>0 then length(tas_)
-		else if length(peaks_pr1)>0 then length(peaks_pr1)
-		else 0
+	Int num_rep = if disable_ataqc then 0 else length(fastqs_)
 	File? null
 
-	Array[File] read_len_logs_ = flatten([read_len_logs, bowtie2.read_len_log])
-	Array[File] flagstat_qcs_ = flatten([flagstat_qcs, bowtie2.flagstat_qc])
-	Array[File] align_logs_ = flatten([align_logs, bowtie2.align_log])
-	Array[File] pbc_qcs_ = flatten([pbc_qcs, filter.pbc_qc])
-	Array[File] dup_qcs_ = flatten([dup_qcs, filter.dup_qc])
-	Array[File] nodup_flagstat_qcs_ = flatten([nodup_flagstat_qcs, filter.flagstat_qc])
-	Array[File] mito_dup_logs_ = flatten([mito_dup_logs, filter.mito_dup_log])
-	Array[File] xcor_plots_ = flatten(select_all([xcor_plots, xcor.plot_png]))
-	Array[File] xcor_scores_ = flatten(select_all([xcor_scores, xcor.score]))
-	Array[File] sig_pvals_ = flatten([sig_pvals, macs2.sig_pval])
-	Array[File] macs2_frip_qcs_ = flatten([macs2_frip_qcs, macs2.frip_qc])
-	Array[File] macs2_pr1_frip_qcs_ = flatten(select_all([macs2_pr1_frip_qcs, macs2_pr1.frip_qc]))
-	Array[File] macs2_pr2_frip_qcs_ = flatten(select_all([macs2_pr2_frip_qcs, macs2_pr2.frip_qc]))
+	Array[File] read_len_logs_ = bowtie2.read_len_log
+	Array[File] flagstat_qcs_ = bowtie2.flagstat_qc
+	Array[File] align_logs_ = bowtie2.align_log
+	Array[File] pbc_qcs_ = filter.pbc_qc
+	Array[File] dup_qcs_ = filter.dup_qc
+	Array[File] nodup_flagstat_qcs_ = filter.flagstat_qc
+	Array[File] mito_dup_logs_ = filter.mito_dup_log
+	Array[File]? xcor_plots_ = xcor.plot_png
+	Array[File]? xcor_scores_ = xcor.score
+	Array[File] sig_pvals_ = macs2.sig_pval
+	Array[File] macs2_frip_qcs_ = macs2.frip_qc
+	Array[File]? macs2_pr1_frip_qcs_ = macs2_pr1.frip_qc
+	Array[File]? macs2_pr2_frip_qcs_ = macs2_pr2.frip_qc
 
 	scatter( i in range(num_rep) ) {
 		call ataqc { input : 
@@ -663,9 +614,9 @@ workflow atac {
 		frip_macs2_qcs = macs2_frip_qcs_,
 		frip_macs2_qcs_pr1 = macs2_pr1_frip_qcs_,
 		frip_macs2_qcs_pr2 = macs2_pr2_frip_qcs_,
-		frip_macs2_qc_pooled = if defined(macs2_pooled_frip_qc_) then macs2_pooled_frip_qc_ else macs2_pooled.frip_qc,
-		frip_macs2_qc_ppr1 = if defined(macs2_ppr1_frip_qc_) then macs2_ppr1_frip_qc_ else macs2_ppr1.frip_qc,
-		frip_macs2_qc_ppr2 = if defined(macs2_ppr2_frip_qc_) then macs2_ppr2_frip_qc_ else macs2_ppr2.frip_qc,
+		frip_macs2_qc_pooled = macs2_pooled.frip_qc,
+		frip_macs2_qc_ppr1 = macs2_ppr1.frip_qc,
+		frip_macs2_qc_ppr2 = macs2_ppr2.frip_qc,
 
 		idr_plots = idr.idr_plot,
 		idr_plots_pr = idr_pr.idr_plot,
@@ -678,8 +629,8 @@ workflow atac {
 		frip_overlap_qc_ppr = overlap_ppr.frip_qc,
 		idr_reproducibility_qc = reproducibility_idr.reproducibility_qc,
 		overlap_reproducibility_qc = reproducibility_overlap.reproducibility_qc,
-		ataqc_txts = flatten([ataqc.txt, ataqc_txts]),
-		ataqc_htmls = flatten([ataqc.html, ataqc_htmls]),
+		ataqc_txts = ataqc.txt,
+		ataqc_htmls = ataqc.html,
 		docker = docker
 	}
 
