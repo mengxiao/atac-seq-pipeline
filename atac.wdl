@@ -1,5 +1,5 @@
-# ENCODE DCC ATAC-Seq/DNase-Seq pipeline
-# Author: Jin Lee (leepc12@gmail.com)
+import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:parse_attach_file_list/versions/1/plain-WDL/descriptor" as read_lines_sub
+import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:read_tsv/versions/1/plain-WDL/descriptor" as read_tsv_sub
 
 workflow atac {
 	String docker = "quay.io/encode-dcc/atac-seq-pipeline:v1.1.6"
@@ -99,41 +99,12 @@ workflow atac {
 		# [rep_id] is for each replicate
 
  	### fastqs and adapters  	
-	 	# define fastqs either with DNANexus style (1-dim array) or with default one (3-dim array)
 	 	# [merge_id] is for pooing fastqs after trimming adapters
 	 	# if adapters defined with any style, keep the same structure/dimension as fastq arrays
 	 	# only defined adapters will be trimmed
 	 	# or undefined adapters will be detected/trimmed by trim_adapter.auto_detect_adapter=true 
 	 	# so you can selectively detect/trim adapters for a specific fastq
- 	## DNANexus UI style fastq/adapter definition
-	Array[File] fastqs_rep1_R1 = []	# [merge_id]
-	Array[File] fastqs_rep1_R2 = [] # do not define _R2 array if your sample is not paired end
-	Array[File] fastqs_rep2_R1 = [] # do not define if you have a single replicate
-	Array[File] fastqs_rep2_R2 = []	# do not define _R2 array if your sample is not paired end
-	Array[File] fastqs_rep3_R1 = [] # do not define if you have <=2 replicates
-	Array[File] fastqs_rep3_R2 = []	# do not define _R2 array if your sample is not paired end
-	Array[File] fastqs_rep4_R1 = [] # do not define if you have <=3 replicates
-	Array[File] fastqs_rep4_R2 = []	# do not define _R2 array if your sample is not paired end
-	Array[File] fastqs_rep5_R1 = [] # do not define if you have <=4 replicates
-	Array[File] fastqs_rep5_R2 = []	# do not define _R2 array if your sample is not paired end
-	Array[File] fastqs_rep6_R1 = [] # do not define if you have <=5 replicates
-	Array[File] fastqs_rep6_R2 = []	# do not define _R2 array if your sample is not paired end
-	Array[String] adapters_rep1_R1 = [] # [merge_id]
-	Array[String] adapters_rep1_R2 = [] 
-	Array[String] adapters_rep2_R1 = []
-	Array[String] adapters_rep2_R2 = []
-	Array[String] adapters_rep3_R1 = []
-	Array[String] adapters_rep3_R2 = []
-	Array[String] adapters_rep4_R1 = []
-	Array[String] adapters_rep4_R2 = []
-	Array[String] adapters_rep5_R1 = []
-	Array[String] adapters_rep5_R2 = []
-	Array[String] adapters_rep6_R1 = []
-	Array[String] adapters_rep6_R2 = []
- 	## default style fastq/adapter definition
  		# [read_end_id] is for fastq R1 or fastq R2
-	Array[Array[Array[File]]] fastqs = [] 	# [rep_id][merge_id][read_end_id]
-	Array[Array[Array[File]]] adapters = []	# [rep_id][merge_id][read_end_id]
 
 	### other input types (bam, nodup_bam, ta)
 	Array[File] bams = [] 		# [rep_id]
@@ -190,46 +161,30 @@ workflow atac {
 	String idr_rank = 'p.value' # IDR ranking method
 
 	### pipeline starts here
-	# temporary 2-dim arrays for DNANexus style fastqs and adapters	
-	Array[Array[File]] fastqs_rep1 = if length(fastqs_rep1_R2)>0 then transpose([fastqs_rep1_R1,fastqs_rep1_R2])
-									else transpose([fastqs_rep1_R1])
-	Array[Array[File]] fastqs_rep2 = if length(fastqs_rep2_R2)>0 then transpose([fastqs_rep2_R1,fastqs_rep2_R2])
-									else transpose([fastqs_rep2_R1])
-	Array[Array[File]] fastqs_rep3 = if length(fastqs_rep3_R2)>0 then transpose([fastqs_rep3_R1,fastqs_rep3_R2])
-									else transpose([fastqs_rep3_R1])
-	Array[Array[File]] fastqs_rep4 = if length(fastqs_rep4_R2)>0 then transpose([fastqs_rep4_R1,fastqs_rep4_R2])
-									else transpose([fastqs_rep4_R1])
-	Array[Array[File]] fastqs_rep5 = if length(fastqs_rep5_R2)>0 then transpose([fastqs_rep5_R1,fastqs_rep5_R2])
-									else transpose([fastqs_rep5_R1])
-	Array[Array[File]] fastqs_rep6 = if length(fastqs_rep6_R2)>0 then transpose([fastqs_rep6_R1,fastqs_rep6_R2])
-									else transpose([fastqs_rep6_R1])
-	Array[Array[String]] adapters_rep1 = if length(adapters_rep1_R2)>0 then transpose([adapters_rep1_R1,adapters_rep1_R2])
-									else transpose([adapters_rep1_R1])
-	Array[Array[String]] adapters_rep2 = if length(adapters_rep2_R2)>0 then transpose([adapters_rep2_R1,adapters_rep2_R2])
-									else transpose([adapters_rep2_R1])
-	Array[Array[String]] adapters_rep3 = if length(adapters_rep3_R2)>0 then transpose([adapters_rep3_R1,adapters_rep3_R2])
-									else transpose([adapters_rep3_R1])
-	Array[Array[String]] adapters_rep4 = if length(adapters_rep4_R2)>0 then transpose([adapters_rep4_R1,adapters_rep4_R2])
-									else transpose([adapters_rep4_R1])
-	Array[Array[String]] adapters_rep5 = if length(adapters_rep5_R2)>0 then transpose([adapters_rep5_R1,adapters_rep5_R2])
-									else transpose([adapters_rep5_R1])
-	Array[Array[String]] adapters_rep6 = if length(adapters_rep6_R2)>0 then transpose([adapters_rep6_R1,adapters_rep6_R2])
-									else transpose([adapters_rep6_R1])
+	# Parse fastq and corresponding adapters files. There needs to be a file listing TSVs, each of which corresponds
+	# to a replicate. In each replicate's TSV, there needs to be a 2 row table, with row 1 corresponding to R1 FASTQs
+	# and row 2 corresponding to R2 FASTQs
+	File fastq_tsv_list
+	call read_lines_sub.parse_attach_file_list as read_fastq_tsv_list { input : file_listing = fastq_tsv_list }
+	scatter( tsv in read_fastq_tsv_list.files ) {
+		call read_tsv_sub.read_tsv as read_fastq_lists {
+			input : tsv = tsv
+		}
+	}
+	Array[Array[Array[File]]] fastqs_ = read_fastq_lists.parsed
 
-	Array[Array[Array[File]]] fastqs_ = if length(fastqs_rep1)<1 then fastqs
-		else if length(fastqs_rep2)<1 then [fastqs_rep1]
-		else if length(fastqs_rep3)<1 then [fastqs_rep1,fastqs_rep2]
-		else if length(fastqs_rep4)<1 then [fastqs_rep1,fastqs_rep2,fastqs_rep3]
-		else if length(fastqs_rep5)<1 then [fastqs_rep1,fastqs_rep2,fastqs_rep3,fastqs_rep4]
-		else if length(fastqs_rep6)<1 then [fastqs_rep1,fastqs_rep2,fastqs_rep3,fastqs_rep4,fastqs_rep5]
-		else [fastqs_rep1,fastqs_rep2,fastqs_rep3,fastqs_rep4,fastqs_rep5,fastqs_rep6]
-	Array[Array[Array[String]]] adapters_ = if length(adapters_rep1)<1 then adapters
-		else if length(adapters_rep2)<1 then [adapters_rep1]
-		else if length(adapters_rep3)<1 then [adapters_rep1,adapters_rep2]
-		else if length(adapters_rep4)<1 then [adapters_rep1,adapters_rep2,adapters_rep3]
-		else if length(adapters_rep5)<1 then [adapters_rep1,adapters_rep2,adapters_rep3,adapters_rep4]
-		else if length(adapters_rep6)<1 then [adapters_rep1,adapters_rep2,adapters_rep3,adapters_rep4,adapters_rep5]
-		else [adapters_rep1,adapters_rep2,adapters_rep3,adapters_rep4,adapters_rep5,adapters_rep6]
+	File? adapter_tsv_list
+	Boolean adapters_specified = defined(adapter_tsv_list)
+	if ( adapters_specified ) {
+		call read_lines_sub.parse_attach_file_list as read_adapter_tsv_list { input : file_listing = adapter_tsv_list }
+		scatter( tsv in read_adapter_tsv_list.files ) {
+			call read_tsv_sub.read_tsv as read_adapter_lists {
+				input : tsv = tsv
+			}
+		}
+		Array[Array[Array[String]]] adapters = read_adapter_lists.parsed
+	}
+	Array[Array[Array[String]]] adapters_ = if adapters_specified then adapters_specified else []
 
 	## temp vars for resuming pipelines
 	Boolean need_to_process_ta = length(peaks_pr1)==0 && length(peaks)==0
