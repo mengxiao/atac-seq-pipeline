@@ -3,8 +3,8 @@ import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:read_tsv/versions/1/plain-
 import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:read_map/versions/2/plain-WDL/descriptor" as read_map_sub
 
 workflow atac {
-	String docker = "quay.io/encode-dcc/atac-seq-pipeline:v1.1.6"
-	String pipeline_ver = 'v1.1.6'
+	String docker = "mxhe/encode-atac-seq-pipeline-firecloud:v1.1.6-1"
+	String pipeline_ver = 'v1.1.6-1'
 	### sample name, description
 	String title = 'Untitled'
 	String description = 'No description'
