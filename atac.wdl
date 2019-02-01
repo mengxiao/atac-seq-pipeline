@@ -15,14 +15,14 @@ workflow atac {
 	### mandatory genome param
 	File genome_tsv 		# reference genome data TSV file including
 							# all important genome specific data file paths and parameters
-	Boolean paired_end
+	Boolean paired_end = true
 
 	### optional but important
 	Boolean align_only = false		# disable all post-align analysis (peak-calling, overlap, idr, ...)
 	Boolean true_rep_only = false 	# disable all analyses for pseudo replicates
 									# overlap and idr will also be disabled
 
-	Boolean auto_detect_adapter = false	# automatically detect/trim adapters
+	Boolean auto_detect_adapter = true	# automatically detect/trim adapters
 	Int cutadapt_min_trim_len = 5	# minimum trim length for cutadapt -m
 	Float cutadapt_err_rate = 0.1	# Maximum allowed adapter error rate for cutadapt -e	
 
@@ -30,7 +30,7 @@ workflow atac {
 
 	String bowtie2_score_min = ''	# min acceptable alignment score func w.r.t read length
 
-	String dup_marker = 'picard'	# picard MarkDuplicates (picard) or sambamba markdup (sambamba)
+	String dup_marker = 'sambamba'	# picard MarkDuplicates (picard) or sambamba markdup (sambamba)
 	Int mapq_thresh = 30			# threshold for low MAPQ reads removal
 	Boolean no_dup_removal = false 	# no dupe reads removal when filtering BAM
 									# dup.qc and pbc.qc will be empty files
