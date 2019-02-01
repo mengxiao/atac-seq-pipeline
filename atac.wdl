@@ -1,5 +1,6 @@
 import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:parse_attach_file_list/versions/1/plain-WDL/descriptor" as read_lines_sub
 import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:read_tsv/versions/1/plain-WDL/descriptor" as read_tsv_sub
+import "https://api.firecloud.org/ga4gh/v1/tools/mxhe:read_map/versions/2/plain-WDL/descriptor" as read_map_sub
 
 workflow atac {
 	String docker = "quay.io/encode-dcc/atac-seq-pipeline:v1.1.6"
@@ -141,20 +142,20 @@ workflow atac {
 	Array[File] ataqc_txts = []
 
 	### read genome data and paths
-	call read_genome_tsv { input:genome_tsv = genome_tsv }
-	File bowtie2_idx_tar = read_genome_tsv.genome['bowtie2_idx_tar']
-	File blacklist = read_genome_tsv.genome['blacklist']
-	File chrsz = read_genome_tsv.genome['chrsz']
-	String gensz = read_genome_tsv.genome['gensz']
-	File ref_fa = read_genome_tsv.genome['ref_fa']
+	call read_map_sub.read_map as read_genome_tsv { input : map_file = genome_tsv }
+	File bowtie2_idx_tar = read_genome_tsv.map['bowtie2_idx_tar']
+	File blacklist = read_genome_tsv.map['blacklist']
+	File chrsz = read_genome_tsv.map['chrsz']
+	String gensz = read_genome_tsv.map['gensz']
+	File ref_fa = read_genome_tsv.map['ref_fa']
 	# genome data for ATAQC
-	File tss_enrich = read_genome_tsv.genome['tss_enrich']
-	File dnase = read_genome_tsv.genome['dnase']
-	File prom = read_genome_tsv.genome['prom']
-	File enh = read_genome_tsv.genome['enh']
-	File reg2map = read_genome_tsv.genome['reg2map']
-	File reg2map_bed = read_genome_tsv.genome['reg2map_bed']
-	File roadmap_meta = read_genome_tsv.genome['roadmap_meta']
+	File tss_enrich = read_genome_tsv.map['tss_enrich']
+	File dnase = read_genome_tsv.map['dnase']
+	File prom = read_genome_tsv.map['prom']
+	File enh = read_genome_tsv.map['enh']
+	File reg2map = read_genome_tsv.map['reg2map']
+	File reg2map_bed = read_genome_tsv.map['reg2map_bed']
+	File roadmap_meta = read_genome_tsv.map['roadmap_meta']
 
 	### temp vars (do not define these)
 	String peak_type = 'narrowPeak' # peak type for IDR and overlap
@@ -1320,24 +1321,6 @@ task qc_report {
 	}
 }
 
-task read_genome_tsv {
-	File genome_tsv
-	command {
-		cat ${genome_tsv} > 'tmp.tsv'
-	}
-	output {
-		Map[String,String] genome = read_map('tmp.tsv')
-	}
-	runtime {
-		cpu : 1
-		memory : "3700 MB"
-		time : 1
-		disks : "local-disk 50 HDD"
-		preemptible : 3
-		docker : "${docker}"
-	}
-}
-
 task compare_md5sum {
 	Array[String] labels
 	Array[File] files
@@ -1427,8 +1410,10 @@ task compare_md5sum {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
-		disks : "local-disk 50 HDD"		
+		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
