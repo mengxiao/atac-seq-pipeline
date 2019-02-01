@@ -103,9 +103,8 @@ workflow atac {
 
 	Int trim_adapter_cpu = 2 * length(fastqs_) * (if paired_end then 2 else 1)
 
-	Int bowtie2_cpu = 4
-	Int bowtie2_mem_mb = 20000
-	Int bowtie2_time_hr = 48
+	Int bowtie2_cpu = 96
+	Int bowtie2_mem_mb = 6000
 
 	Int filter_cpu = 2
 	Int filter_mem_mb = 20000
@@ -172,7 +171,6 @@ workflow atac {
 
 			cpu = bowtie2_cpu,
 			mem_mb = bowtie2_mem_mb,
-			time_hr = bowtie2_time_hr,
 			disks = disks,
 			docker = docker
 		}
@@ -689,7 +687,6 @@ task bowtie2 {
 						# w.r.t read length
 	Int cpu
 	Int mem_mb
-	Int time_hr
 	String disks
 	String docker
 
@@ -712,9 +709,8 @@ task bowtie2 {
 	runtime {
 		cpu : cpu
 		memory : "${mem_mb} MB"
-		time : time_hr
 		disks : disks
-		preemptible: 0
+		preemptible: 3
 		docker : "${docker}"
 	}
 }
