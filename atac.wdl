@@ -61,12 +61,47 @@ workflow atac {
 
 	Boolean disable_ataqc = false
 
+	#### input file definition
+		# define up to 6 replicates
+		# [rep_id] is for each replicate
+
+	### fastqs and adapters
+		# [merge_id] is for pooing fastqs after trimming adapters
+		# if adapters defined with any style, keep the same structure/dimension as fastq arrays
+		# only defined adapters will be trimmed
+		# or undefined adapters will be detected/trimmed by trim_adapter.auto_detect_adapter=true
+		# so you can selectively detect/trim adapters for a specific fastq
+		# [read_end_id] is for fastq R1 or fastq R2
+
+	# Parse fastq and corresponding adapters files. There needs to be a file listing TSVs, each of which corresponds
+	# to a replicate. In each replicate's TSV, there needs to be a 2 row table, with row 1 corresponding to R1 FASTQs
+	# and row 2 corresponding to R2 FASTQs
+	File fastq_tsv_list
+	call read_lines_sub.parse_attach_file_list as read_fastq_tsv_list { input : file_listing = fastq_tsv_list }
+	scatter( tsv in read_fastq_tsv_list.files ) {
+		call read_tsv_sub.read_tsv as read_fastq_lists {
+			input : tsv = tsv
+		}
+	}
+	Array[Array[Array[File]]] fastqs_ = read_fastq_lists.parsed
+
+	File? adapter_tsv_list
+	Boolean adapters_specified = defined(adapter_tsv_list)
+	if ( adapters_specified ) {
+		call read_lines_sub.parse_attach_file_list as read_adapter_tsv_list { input : file_listing = adapter_tsv_list }
+		scatter( tsv in read_adapter_tsv_list.files ) {
+			call read_tsv_sub.read_tsv as read_adapter_lists {
+				input : tsv = tsv
+			}
+		}
+		Array[Array[Array[String]]] adapters = read_adapter_lists.parsed
+	}
+	Array[Array[Array[String]]] adapters_ = if adapters_specified then adapters_specified else []
+
 	### resources (disks: for cloud platforms)
 	String disks
 
-	Int trim_adapter_cpu = 2
-	Int trim_adapter_mem_mb = 12000
-	Int trim_adapter_time_hr = 24
+	Int trim_adapter_cpu = 2 * length(fastqs_) * (if paired_end then 2 else 1)
 
 	Int bowtie2_cpu = 4
 	Int bowtie2_mem_mb = 20000
@@ -113,43 +148,6 @@ workflow atac {
 	String peak_type = 'narrowPeak' # peak type for IDR and overlap
 	String idr_rank = 'p.value' # IDR ranking method
 
-	#### input file definition
-		# define up to 6 replicates
-		# [rep_id] is for each replicate
-
-	### fastqs and adapters
-		# [merge_id] is for pooing fastqs after trimming adapters
-		# if adapters defined with any style, keep the same structure/dimension as fastq arrays
-		# only defined adapters will be trimmed
-		# or undefined adapters will be detected/trimmed by trim_adapter.auto_detect_adapter=true
-		# so you can selectively detect/trim adapters for a specific fastq
-		# [read_end_id] is for fastq R1 or fastq R2
-
-	# Parse fastq and corresponding adapters files. There needs to be a file listing TSVs, each of which corresponds
-	# to a replicate. In each replicate's TSV, there needs to be a 2 row table, with row 1 corresponding to R1 FASTQs
-	# and row 2 corresponding to R2 FASTQs
-	File fastq_tsv_list
-	call read_lines_sub.parse_attach_file_list as read_fastq_tsv_list { input : file_listing = fastq_tsv_list }
-	scatter( tsv in read_fastq_tsv_list.files ) {
-		call read_tsv_sub.read_tsv as read_fastq_lists {
-			input : tsv = tsv
-		}
-	}
-	Array[Array[Array[File]]] fastqs_ = read_fastq_lists.parsed
-
-	File? adapter_tsv_list
-	Boolean adapters_specified = defined(adapter_tsv_list)
-	if ( adapters_specified ) {
-		call read_lines_sub.parse_attach_file_list as read_adapter_tsv_list { input : file_listing = adapter_tsv_list }
-		scatter( tsv in read_adapter_tsv_list.files ) {
-			call read_tsv_sub.read_tsv as read_adapter_lists {
-				input : tsv = tsv
-			}
-		}
-		Array[Array[Array[String]]] adapters = read_adapter_lists.parsed
-	}
-	Array[Array[Array[String]]] adapters_ = if adapters_specified then adapters_specified else []
-
 	scatter( i in range(length(fastqs_)) ) {
 		# trim adapters and merge trimmed fastqs
 		call trim_adapter { input :
@@ -161,8 +159,6 @@ workflow atac {
 			err_rate = cutadapt_err_rate,
 
 			cpu = trim_adapter_cpu,
-			mem_mb = trim_adapter_mem_mb,
-			time_hr = trim_adapter_time_hr,
 			disks = disks,
 			docker = docker
 		}
@@ -652,8 +648,6 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	Float err_rate			# Maximum allowed adapter error rate 
 							# for cutadapt -e	
 	Int cpu
-	Int mem_mb
-	Int time_hr
 	String disks
 	String docker
 
