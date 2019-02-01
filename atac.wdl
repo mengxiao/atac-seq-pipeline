@@ -2,6 +2,7 @@
 # Author: Jin Lee (leepc12@gmail.com)
 
 workflow atac {
+	String docker = "quay.io/encode-dcc/atac-seq-pipeline:v1.1.6"
 	String pipeline_ver = 'v1.1.6'
 	### sample name, description
 	String title = 'Untitled'
@@ -60,41 +61,36 @@ workflow atac {
 	Boolean disable_ataqc = false
 
 	### resources (disks: for cloud platforms)
+	String disks
+
 	Int trim_adapter_cpu = 2
 	Int trim_adapter_mem_mb = 12000
 	Int trim_adapter_time_hr = 24
-	String trim_adapter_disks = "local-disk 100 HDD"
 
 	Int bowtie2_cpu = 4
 	Int bowtie2_mem_mb = 20000
 	Int bowtie2_time_hr = 48
-	String bowtie2_disks = "local-disk 100 HDD"
 
 	Int filter_cpu = 2
 	Int filter_mem_mb = 20000
 	Int filter_time_hr = 24
-	String filter_disks = "local-disk 100 HDD"
 
 	Int bam2ta_cpu = 2
 	Int bam2ta_mem_mb = 10000
 	Int bam2ta_time_hr = 6
-	String bam2ta_disks = "local-disk 100 HDD"
 
 	Int spr_mem_mb = 16000
 
 	Int xcor_cpu = 2
 	Int xcor_mem_mb = 16000
 	Int xcor_time_hr = 6
-	String xcor_disks = "local-disk 100 HDD"
 
 	Int macs2_mem_mb = 16000
 	Int macs2_time_hr = 24
-	String macs2_disks = "local-disk 100 HDD"
 
 	Int ataqc_mem_mb = 16000
 	Int ataqc_mem_java_mb = 15000
 	Int ataqc_time_hr = 24
-	String ataqc_disks = "local-disk 400 HDD"
 
 	#### input file definition
 		# pipeline can start from any type of inputs and then leave all other types undefined
@@ -254,7 +250,8 @@ workflow atac {
 			cpu = trim_adapter_cpu,
 			mem_mb = trim_adapter_mem_mb,
 			time_hr = trim_adapter_time_hr,
-			disks = trim_adapter_disks,
+			disks = disks,
+			docker = docker
 		}
 		# align trimmed/merged fastqs with bowtie2s
 		call bowtie2 { input :
@@ -267,7 +264,8 @@ workflow atac {
 			cpu = bowtie2_cpu,
 			mem_mb = bowtie2_mem_mb,
 			time_hr = bowtie2_time_hr,
-			disks = bowtie2_disks,
+			disks = disks,
+			docker = docker
 		}
 	}
 
@@ -286,7 +284,8 @@ workflow atac {
 			cpu = filter_cpu,
 			mem_mb = filter_mem_mb,
 			time_hr = filter_time_hr,
-			disks = filter_disks,
+			disks = disks,
+			docker = docker
 		}
 	}
 
@@ -304,7 +303,8 @@ workflow atac {
 			cpu = bam2ta_cpu,
 			mem_mb = bam2ta_mem_mb,
 			time_hr = bam2ta_time_hr,
-			disks = bam2ta_disks,			
+			disks = disks,
+			docker = docker
 		}
 	}
 
@@ -324,14 +324,16 @@ workflow atac {
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 			mem_mb = macs2_mem_mb,
-			disks = macs2_disks,
+			disks = disks,
 			time_hr = macs2_time_hr,
+			docker = docker
 		}
 	}
 	if ( length(tas__)>1 ) {
 		# pool tagaligns from true replicates
 		call pool_ta { input :
 			tas = tas__,
+			docker = docker
 		}
 		# call peaks on pooled replicate
 		call macs2 as macs2_pooled { input :
@@ -346,8 +348,9 @@ workflow atac {
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 			mem_mb = macs2_mem_mb,
-			disks = macs2_disks,
+			disks = disks,
 			time_hr = macs2_time_hr,
+			docker = docker
 		}
 	}
 	if ( enable_xcor && length(xcor_scores)<1 ) {
@@ -362,7 +365,8 @@ workflow atac {
 				cpu = xcor_cpu,
 				mem_mb = xcor_mem_mb,
 				time_hr = xcor_time_hr,
-				disks = xcor_disks,				
+				disks = disks,
+				docker = docker
 			}
 		}
 	}
@@ -374,6 +378,7 @@ workflow atac {
 				ta = ta,
 				paired_end = paired_end,
 				mem_mb = spr_mem_mb,
+				docker = docker
 			}
 			# call peaks on 1st pseudo replicated tagalign 
 			call macs2 as macs2_pr1 { input :
@@ -388,8 +393,9 @@ workflow atac {
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 				mem_mb = macs2_mem_mb,
-				disks = macs2_disks,
+				disks = disks,
 				time_hr = macs2_time_hr,
+				docker = docker
 			}
 			# call peaks on 2nd pseudo replicated tagalign 
 			call macs2 as macs2_pr2 { input :
@@ -404,8 +410,9 @@ workflow atac {
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 				mem_mb = macs2_mem_mb,
-				disks = macs2_disks,
+				disks = disks,
 				time_hr = macs2_time_hr,
+				docker = docker
 			}
 		}
 	}
@@ -414,9 +421,11 @@ workflow atac {
 		# pool tagaligns from pseudo replicates
 		call pool_ta as pool_ta_pr1 { input :
 			tas = spr.ta_pr1,
+			docker = docker
 		}
 		call pool_ta as pool_ta_pr2 { input :
 			tas = spr.ta_pr2,
+			docker = docker
 		}
 		# call peaks on 1st pooled pseudo replicates
 		call macs2 as macs2_ppr1 { input :
@@ -431,8 +440,9 @@ workflow atac {
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 			mem_mb = macs2_mem_mb,
-			disks = macs2_disks,
+			disks = disks,
 			time_hr = macs2_time_hr,
+			docker = docker
 		}
 		# call peaks on 2nd pooled pseudo replicates
 		call macs2 as macs2_ppr2 { input :
@@ -447,8 +457,9 @@ workflow atac {
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 
 			mem_mb = macs2_mem_mb,
-			disks = macs2_disks,
+			disks = disks,
 			time_hr = macs2_time_hr,
+			docker = docker
 		}
 	}
 
@@ -491,6 +502,7 @@ workflow atac {
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 				ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				docker = docker
 			}
 		}
 	}
@@ -509,6 +521,7 @@ workflow atac {
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 				ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				docker = docker
 			}
 		}
 	}
@@ -528,6 +541,7 @@ workflow atac {
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 			ta = if length(tas_)>0 then tas_[i] else if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+			docker = docker
 		}
 	}
 	if ( enable_idr ) {
@@ -545,6 +559,7 @@ workflow atac {
 				chrsz = chrsz,
 				keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
 				ta = if length(tas_)>0 then tas_[i] else if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+				docker = docker
 			}
 		}
 	}
@@ -559,12 +574,14 @@ workflow atac {
 			blacklist = blacklist,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
-			ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled
+			ta = if defined(ta_pooled) then ta_pooled else pool_ta.ta_pooled,
+			docker = docker
 		}
 	}
 	if ( enable_idr && length(peaks_pr1_)>1  ) {
 		# IDR on pooled pseduo replicates
 		call idr as idr_ppr { input : 
+			docker = docker,
 			prefix = "ppr",
 			peak1 = select_first([macs2_ppr1.npeak, peak_ppr1]),
 			peak2 = select_first([macs2_ppr2.npeak, peak_ppr2]),
@@ -588,6 +605,7 @@ workflow atac {
 			peak_type = peak_type,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
+			docker = docker
 		}
 	}
 	if ( !align_only && !true_rep_only && enable_idr ) {
@@ -600,6 +618,7 @@ workflow atac {
 			peak_type = peak_type,
 			chrsz = chrsz,
 			keep_irregular_chr_in_bfilt_peak = keep_irregular_chr_in_bfilt_peak,
+			docker = docker
 		}
 	}
 
@@ -662,7 +681,7 @@ workflow atac {
 			mem_mb = ataqc_mem_mb,
 			mem_java_mb = ataqc_mem_java_mb,
 			time_hr = ataqc_time_hr,
-			disks = ataqc_disks,
+			docker = docker
 		}
 	}
 
@@ -705,6 +724,7 @@ workflow atac {
 		overlap_reproducibility_qc = reproducibility_overlap.reproducibility_qc,
 		ataqc_txts = flatten([ataqc.txt, ataqc_txts]),
 		ataqc_htmls = flatten([ataqc.html, ataqc_htmls]),
+		docker = docker
 	}
 
 	output {
@@ -728,6 +748,7 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	Int mem_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		python $(which encode_trim_adapter.py) \
@@ -753,6 +774,8 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -767,6 +790,7 @@ task bowtie2 {
 	Int mem_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		python $(which encode_bowtie2.py) \
@@ -790,6 +814,7 @@ task bowtie2 {
 		time : time_hr
 		disks : disks
 		preemptible: 0
+		docker : "${docker}"
 	}
 }
 
@@ -809,6 +834,7 @@ task filter {
 	Int mem_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		${if no_dup_removal then "touch null.dup.qc null.pbc.qc null.mito_dup.txt; " else ""}
@@ -836,6 +862,8 @@ task filter {
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -852,6 +880,7 @@ task bam2ta {
 	Int mem_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		python $(which encode_bam2ta.py) \
@@ -871,6 +900,8 @@ task bam2ta {
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -879,6 +910,7 @@ task spr { # make two self pseudo replicates
 	Boolean paired_end
 
 	Int mem_mb
+	String docker
 
 	command {
 		python $(which encode_spr.py) \
@@ -894,11 +926,15 @@ task spr { # make two self pseudo replicates
 		memory : "${mem_mb} MB"
 		time : 1
 		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
 task pool_ta {
 	Array[File] tas
+
+	String docker
 
 	command {
 		python $(which encode_pool_ta.py) \
@@ -909,9 +945,11 @@ task pool_ta {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
 		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -926,6 +964,7 @@ task xcor {
 	Int mem_mb	
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		python $(which encode_xcor.py) \
@@ -947,6 +986,8 @@ task xcor {
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -965,6 +1006,7 @@ task macs2 {
 	Int mem_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		${if make_signal then "" 
@@ -995,6 +1037,8 @@ task macs2 {
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1011,6 +1055,8 @@ task idr {
 	File chrsz			# 2-col chromosome sizes file
 	String peak_type
 	String rank
+
+	String docker
 
 	command {
 		${if defined(ta) then "" else "touch null.frip.qc"}
@@ -1038,10 +1084,12 @@ task idr {
 	}
 	runtime {
 		cpu : 1
-		memory : "8000 MB"
+		memory : "7400 MB"
 		time : 1
 		disks : "local-disk 50 HDD"
-	}	
+		preemptible : 3
+		docker : "${docker}"
+	}
 }
 
 task overlap {
@@ -1054,6 +1102,8 @@ task overlap {
 	File? ta		# to calculate FRiP
 	File chrsz			# 2-col chromosome sizes file
 	String peak_type
+
+	String docker
 
 	command {
 		${if defined(ta) then "" else "touch null.frip.qc"}
@@ -1077,9 +1127,11 @@ task overlap {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
 		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1094,6 +1146,8 @@ task reproducibility {
 	String peak_type
 	File chrsz			# 2-col chromosome sizes file
 	Boolean	keep_irregular_chr_in_bfilt_peak
+
+	String docker
 
 	command {
 		python $(which encode_reproducibility_qc.py) \
@@ -1116,9 +1170,11 @@ task reproducibility {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
 		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1155,6 +1211,7 @@ task ataqc { # generate ATAQC report
 	Int mem_java_mb
 	Int time_hr
 	String disks
+	String docker
 
 	command {
 		export _JAVA_OPTIONS="-Xms256M -Xmx${mem_java_mb}M -XX:ParallelGCThreads=1 $_JAVA_OPTIONS"
@@ -1197,6 +1254,8 @@ task ataqc { # generate ATAQC report
 		memory : "${mem_mb} MB"
 		time : time_hr
 		disks : disks
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1247,6 +1306,8 @@ task qc_report {
 
 	File? qc_json_ref
 
+	String docker
+
 	command {
 		python $(which encode_qc_report.py) \
 			${"--pipeline-ver " + pipeline_ver} \
@@ -1296,9 +1357,11 @@ task qc_report {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
-		disks : "local-disk 50 HDD"		
+		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1312,9 +1375,11 @@ task read_genome_tsv {
 	}
 	runtime {
 		cpu : 1
-		memory : "4000 MB"
+		memory : "3700 MB"
 		time : 1
-		disks : "local-disk 50 HDD"		
+		disks : "local-disk 50 HDD"
+		preemptible : 3
+		docker : "${docker}"
 	}
 }
 
@@ -1322,6 +1387,8 @@ task compare_md5sum {
 	Array[String] labels
 	Array[File] files
 	Array[File] ref_files
+
+	String docker
 
 	command <<<
 		python <<CODE	
