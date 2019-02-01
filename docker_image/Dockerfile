@@ -149,9 +149,9 @@ ENV PYTHONNOUSERSITE=True
 # and it gets whatever is checked out plus local modifications
 # so the buildling command should:
 # cd [GIT_REPO_DIR] && docker build -f docker_images/pipeline/Dockerfile .
-RUN mkdir -p atac-seq-pipeline/src
-COPY src atac-seq-pipeline/src/
-COPY atac.wdl atac-seq-pipeline/
+RUN git clone --branch v1.1.6-1 --single-branch --depth=1 https://github.com/mengxiao/atac-seq-pipeline.git && \
+    cd atac-seq-pipeline && find . ! -name 'src' -type df -exec rm -rf {} +
+
 ENV PATH="/software/atac-seq-pipeline:/software/atac-seq-pipeline/src:${PATH}"
 
 # make some temporary directories
