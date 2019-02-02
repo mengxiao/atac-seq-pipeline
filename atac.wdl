@@ -101,8 +101,6 @@ workflow atac {
 	### resources (disks: for cloud platforms)
 	String disks
 
-	Int trim_adapter_cpu = 2 * length(fastqs_) * (if paired_end then 2 else 1)
-
 	Int bowtie2_cpu = 96
 	Int bowtie2_mem_mb = 6000
 
@@ -157,7 +155,6 @@ workflow atac {
 			min_trim_len = cutadapt_min_trim_len,
 			err_rate = cutadapt_err_rate,
 
-			cpu = trim_adapter_cpu,
 			disks = disks,
 			docker = docker
 		}
@@ -645,7 +642,7 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	Int min_trim_len 		# minimum trim length for cutadapt -m
 	Float err_rate			# Maximum allowed adapter error rate 
 							# for cutadapt -e	
-	Int cpu
+	Int cpu = floor(4 / 3 * length(fastqs) * (if paired_end then 2 else 1))
 	String disks
 	String docker
 
@@ -670,8 +667,6 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	}
 	runtime {
 		cpu : cpu
-		memory : "${mem_mb} MB"
-		time : time_hr
 		disks : disks
 		preemptible : 3
 		docker : "${docker}"
