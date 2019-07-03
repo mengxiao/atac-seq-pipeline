@@ -141,7 +141,7 @@ def merge_fastqs(fastqs, end, out_dir):
     merged = '{}.merged.fastq.gz'.format(prefix)
 
     if len(fastqs)>1:
-        cmd = 'zcat -f {} | gzip -nc > {}'.format(
+        cmd = 'cat {} > {}'.format(
             ' '.join(fastqs),
             merged)
         run_shell_cmd(cmd)
